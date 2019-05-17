@@ -1,0 +1,95 @@
+#include <ESP8266WiFi.h>
+#include <SoftwareSerial.h>
+SoftwareSerial NodeMCU(D1, D0);
+
+const char* ssid = "2.4-1730 Magnolia";
+const char* password = "CXNK0030FF4B";
+
+WiFiServer server(80);
+String header, data, sbpm, stempe;
+int value, bpm, tempe;
+
+void setup() {
+  Serial.begin(115200);
+  NodeMCU.begin(9600);
+
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi connected.");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+  server.begin();
+}
+
+void loop() {
+  data = NodeMCU.readString();
+  Serial.println(data);
+  value = data.toInt();
+  tempe = value / 10000000;
+  stempe = String(tempe);
+  bpm = value % 100000;
+  sbpm = String(bpm);
+  WiFiClient client = server.available();
+  if (client) {
+    Serial.println(data);
+    Serial.println("New Client in.");
+    String currentLine = "";
+    while (client.connected()) {
+      if (client.available()) {
+        char c = client.read();
+        Serial.write(c);
+        header += c;
+        if (c == '\n') {
+          if (currentLine.length() == 0) {
+            client.println("HTTP/1.1 200 OK");
+            client.println("Content-type:text/html");
+            client.println("Connection: close");
+            client.println();
+
+            client.println("<!DOCTYPE html><html>");
+            client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" >");
+            client.println("<meta http-equiv=\"refresh\" content=\"0.3\">");
+            client.println("<link rel=\"icon\" href=\"data:,\">");
+            client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}");
+            client.println("body {background-color: white;}</style></head>");
+
+            client.println("<body><h1><font color ='##000000'>Heart Rate Monitor</h1>");
+            client.println("<h2 style = color:black>ECE 387 Final Project</h2>");
+            client.println("<hr>");
+            client.println("<h3 style = color:black> Your Beat Per Minute (BPM) :</h3>");
+            
+            if (bpm > 140 || bpm < 60) {
+              client.println("<h2 style = color:red>" + sbpm + "</h2>");
+            }
+            else {
+              client.println("<h2 style = color:green>" + sbpm + "</h2>");
+            }
+            client.println("<h3 style = color:black>Your body temperature is :</h3>");
+            client.println("<h2 style = color:black>" + stempe + "&#176C</h2>");
+            client.println("</body></html>");
+            client.println();
+            delay(1000);
+            break;
+          }
+          else {
+            currentLine = "";
+          }
+        }
+        else if (c != '\r') {
+          currentLine += c;
+        }
+      }
+    }
+    header = "";
+    delay(1);
+    client.stop();
+    Serial.println("Client disconnected.");
+    Serial.println("");
+  }
+}
